@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './App.css';
 
 const App = () => {
@@ -10,43 +10,63 @@ const App = () => {
   const [aiSpeed, setAiSpeed] = useState(1);
   const [countdown, setCountdown] = useState(0);
   const [difficulty, setDifficulty] = useState('medium');
+  const [scoreAnimation, setScoreAnimation] = useState(false);
+  const [highScoreAnimation, setHighScoreAnimation] = useState(false);
+  const [newHighScore, setNewHighScore] = useState(false);
+  const [particles, setParticles] = useState([]);
   
+  
+   const gameSettings =  useMemo(() => {
+    switch(difficulty) {
+      case 'easy':
+        return { 
+          pipeGap: 220,
+          initialDistance : 0.50, 
+          collisionBuffer: 20,
+          topCollisionBuffer: 40,
+          gravity: 0.3, 
+          jumpForce: -7
+        };
+      case 'medium':
+        return { 
+          pipeGap: 200, 
+          initialDistance : 0.75, 
+          collisionBuffer: 15,
+          topCollisionBuffer: 30,
+          gravity: 0.4, 
+          jumpForce: -8
+        };
+      case 'hard':
+        return { 
+          pipeGap: 180, 
+          initialDistance : 0.80, 
+          collisionBuffer: 10,
+          topCollisionBuffer: 20,
+          gravity: 0.5, 
+          jumpForce: -10
+        };
+      default:
+        return { 
+          pipeGap: 200, 
+          initialDistance : 0.75, 
+          collisionBuffer: 15,
+          topCollisionBuffer: 30,
+          gravity: 0.4, 
+          jumpForce: -8
+        };
+    }
+  }, [difficulty]);
 
-const getGameSettings = () => {
-  switch(difficulty) {
-    case 'easy':
-      return { pipeGap: 220, initialDistance: 350, collisionBuffer: 20 };
-    case 'medium':
-      return { pipeGap: 200, initialDistance: 300, collisionBuffer: 15 };
-    case 'hard':
-      return { pipeGap: 180, initialDistance: 250, collisionBuffer: 10 };
-    default:
-      return { pipeGap: 200, initialDistance: 300, collisionBuffer: 15 };
-  }
-};
-  const getTopCollisionBuffer = () => {
-  switch(difficulty) {
-    case 'easy': return 40;
-    case 'medium': return 30;
-    case 'hard': return 20;
-    default: return 30;
-  }
-};
+  // Destructure all settings at once
+  const {
+    pipeGap,
+    collisionBuffer,
+    topCollisionBuffer,
+    gravity,
+    jumpForce,
+    initialDistance
+  } = gameSettings;
 
-const getPhysicsSettings = () => {
-  switch(difficulty) {
-    case 'easy':
-      return { gravity: 0.3, jumpForce: -7, pipeGap: 200 };
-    case 'medium':
-      return { gravity: 0.4, jumpForce: -8, pipeGap: 180 };
-    case 'hard':
-      return { gravity: 0.5, jumpForce: -10, pipeGap: 150 };
-    default:
-      return { gravity: 0.4, jumpForce: -8, pipeGap: 180 };
-  }
-};
-
-//const { gravity, jumpForce, pipeGap } = getPhysicsSettings();
 const useGameAreaSize = () => {
   const [size, setSize] = useState({ width: 400, height: 600 });
   
@@ -70,6 +90,9 @@ const useGameAreaSize = () => {
 
 const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
 
+// Add this with your other utility functions at the top of your component
+const generatePipeId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
   // Game elements refs
   const birdRef = useRef(null);
   const gameAreaRef = useRef(null);
@@ -78,15 +101,15 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
   const aiTimeoutRef = useRef();
   
   // Game constants
-  const gravity = 0.5;
-  const jumpForce = -10;
+  //const gravity = 0.5;
+  //const jumpForce = -10;
   const pipeWidth = 80;
-  const pipeGap = 180;
-  const topCollisionBuffer = 10;
+  //const pipeGap = 180;
+  //const topCollisionBuffer = 10;
 
-   const initialPipeDistance = gameAreaWidth * 0.75; // Increased from 400 to give more space
+   const initialPipeDistance = gameAreaWidth * initialDistance; // Increased from 400 to give more space
   const minPipeHeight = 80; // Minimum distance from top/bottom
-  const collisionBuffer = 15; // Buffer around bird for collisions
+  //const collisionBuffer = 15; // Buffer around bird for collisions
   
   
 
@@ -104,6 +127,7 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
       }
     };
   }, []);
+
 
   const startGame = () => {
     // Reset all states
@@ -140,7 +164,7 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
              x: initialPipeDistance, // Increased initial distance
              height: Math.floor(Math.random() * (gameAreaHeight - pipeGap - minPipeHeight * 2)) + minPipeHeight,
              passed: false,
-             id: Date.now()
+             id: generatePipeId()
           });
           
           // Start game loop
@@ -168,6 +192,13 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
     checkCollision();
     
     requestRef.current = requestAnimationFrame(gameLoop);
+  /*  if (deltaTime < 100) { // Only continue if frame time is reasonable
+    requestRef.current = requestAnimationFrame(gameLoop);
+  } else {
+    console.warn('Frame time exceeded threshold:', deltaTime);
+    endGame();
+  } */
+
   };
 
   const moveBird = () => {
@@ -194,7 +225,7 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
         x: 400,
         height: Math.floor(Math.random() * 200) + 50,
         passed: false,
-        id: Date.now() + Math.random()
+        id: generatePipeId
       });
     }
     
@@ -204,7 +235,13 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
       
       if (!pipe.passed && newX + pipeWidth < 50 && !gameOver) {
         pipe.passed = true;
-        setScore(prev => prev + 1);
+        setScore(prev => {
+        // Cap score at maximum safe integer if needed
+        const newScore = prev + 1;
+        return newScore > Number.MAX_SAFE_INTEGER - 1000 ? 0 : newScore;
+      });
+      setScoreAnimation(true);
+      setTimeout(() => setScoreAnimation(false), 500); // Increase score
       }
       
       return { ...pipe, x: newX };
@@ -219,8 +256,11 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
     if (!gameArea || gameOver) return;
     
     // Remove old pipes
-    const oldPipes = gameArea.querySelectorAll('.pipe');
-    oldPipes.forEach(pipe => pipe.remove());
+    //const oldPipes = gameArea.querySelectorAll('.pipe');
+    //oldPipes.forEach(pipe => pipe.remove());
+
+    const oldPipes = gameArea.querySelectorAll('[data-id^="top-"], [data-id^="bottom-"]');
+  oldPipes.forEach(pipe => pipe.remove());
     
     // Create new pipes
     pipes.forEach(pipe => {
@@ -252,7 +292,7 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
     const gameArea = gameAreaRef.current.getBoundingClientRect();
     
     // Ground/ceiling check with larger buffer
-    if (bird.bottom >= gameArea.bottom - 20 ) {
+    if (bird.bottom >= gameArea.bottom - 10 || bird.top <= gameArea.top + 10 ) {
       endGame();
       return;
     }
@@ -278,10 +318,10 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
         const bottomRect = pipeBottom.getBoundingClientRect();
         
         // More precise collision detection with buffers
-        const birdRight = bird.right - 15; // Right side with buffer
-        const birdLeft = bird.left + 15;   // Left side with buffer
-        const birdBottom = bird.bottom - 10; // Bottom with buffer
-        const birdTop = bird.top + 10;      // Top with buffer
+        const birdRight = bird.right - 5; // Right side with buffer
+        const birdLeft = bird.left + 5;   // Left side with buffer
+        const birdBottom = bird.bottom - 5; // Bottom with buffer
+        const birdTop = bird.top + 5;      // Top with buffer
         
         if (
           bird.right - collisionBuffer > topRect.left + collisionBuffer && 
@@ -292,6 +332,14 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
             endGame();
             return;
           } 
+          if (
+        birdRight > topRect.left + 5 && 
+        birdLeft < topRect.right - 5 &&
+        (birdBottom > topRect.bottom || birdTop < bottomRect.top)
+      ) {
+        endGame();
+        return;
+      }
       }
     }
    
@@ -361,7 +409,155 @@ const { width: gameAreaWidth, height: gameAreaHeight } = useGameAreaSize();
     }
   };
 
+  const handleDifficultyChange = (newDifficulty) => {
+    // Only reset if the difficulty actually changed
+    if (difficulty !== newDifficulty) {
+      setDifficulty(newDifficulty);
+      
+      // If game is running, restart to apply new settings
+     if (gameStarted && !gameOver) {
+    startGame();
+       // resetGame();
+      } 
+    }
+  };
+
+const restartGame = () => {
+  resetGame();
+  startGame();
+};
   
+  
+
+  const resetGame = () => {
+  // Reset all states
+  setGameStarted(false);
+  setGameOver(false);
+  setScore(0);
+  //setIsPlaying(false);
+  setCountdown(0);
+  
+  // Reset physics
+  birdPosition = 250;
+  birdVelocity = 0;
+  pipes = [];
+  
+  // Clear DOM elements
+  const existingPipes = document.querySelectorAll('.pipe');
+  existingPipes.forEach(pipe => pipe.remove());
+  
+  // Reset bird position
+  if (birdRef.current) {
+    birdRef.current.style.top = '250px';
+    birdRef.current.style.transform = 'rotate(0deg)';
+  }
+  
+  // Cancel any ongoing animations
+  cancelAnimationFrame(requestRef.current);
+  if (aiTimeoutRef.current) {
+    clearTimeout(aiTimeoutRef.current);
+  }
+};
+
+// Add this effect when score increases
+const spawnParticles = (count, x, y, isHighScore = false) => {
+  const newParticles = [];
+  for (let i = 0; i < count; i++) {
+    newParticles.push({
+      id: Math.random().toString(36).substr(2, 9),
+      x,
+      y,
+      size: isHighScore ? 
+        Math.random() * 6 + 4 : 
+        Math.random() * 4 + 2,
+      color: isHighScore ?
+        `hsl(${Math.random() * 30 + 40}, 100%, 50%)` : // Golden hues
+        `hsl(${Math.random() * 60 + 100}, 100%, 50%)`, // Greenish hues
+      speedX: (Math.random() - 0.5) * 4,
+      speedY: (Math.random() - 1) * 3, // Float upward more
+      life: isHighScore ? 90 : 60, // Longer life for high scores
+      className: isHighScore ? 'particle highscore' : 'particle score',
+      style: {
+        '--tx': `${(Math.random() - 0.5) * 100}px`,
+        '--ty': `${(Math.random() - 1) * 80}px`
+      }
+    });
+  }
+  setParticles(prev => [...prev, ...newParticles]);
+};
+
+
+const cleanUpPipes = () => {
+  pipes = pipes.filter(pipe => pipe.x > -pipeWidth * 2);
+};
+
+const increaseScore = () => {
+    setScore(prev => {
+      const newScore = prev + 1;
+      
+      // Check for new high score
+      if (newScore > highScore) {
+        setHighScore(newScore);
+        setHighScoreAnimation(true);
+        setNewHighScore(true);
+        setTimeout(() => setNewHighScore(false), 2000);
+        playHighScoreSound();
+        spawnParticles(10, 100, 50, true); // Position near high score display
+    } else {
+      playScoreSound();
+      spawnParticles(5, 50, 50); // Position near score display
+    }
+      
+      return newScore;
+    });
+    
+    // Trigger score animation
+    setScoreAnimation(true);
+    setTimeout(() => setScoreAnimation(false), 500);
+  };
+
+  const playScoreSound = () => {
+  const audio = new Audio('/sounds/score.mp3');
+  audio.volume = 0.3;
+  audio.play();
+};
+
+const playHighScoreSound = () => {
+  const audio = new Audio('/sounds/highscore.mp3');
+  audio.volume = 0.5;
+  audio.play();
+};
+
+useEffect(() => {
+  // Prevent score reset due to integer overflow
+  if (score > highScore) {
+        setHighScore(score);
+        setHighScoreAnimation(true);
+        setNewHighScore(true);
+        setTimeout(() => setNewHighScore(false), 2000);
+       playHighScoreSound();
+      spawnParticles(10, 100, 50, true); // Position near high score display
+    } else {
+      playScoreSound();
+      spawnParticles(5, 50, 50); // Position near score display
+    }
+}, [score]);
+
+// Update your game loop to handle particles
+useEffect(() => {
+  const particleLoop = setInterval(() => {
+    setParticles(prev => 
+      prev.map(p => ({
+        ...p,
+        x: p.x + p.speedX,
+        y: p.y + p.speedY,
+        life: p.life - 1
+      })).filter(p => p.life > 0)
+    );
+  }, 16);
+
+  return () => clearInterval(particleLoop);
+}, []);
 
   // Add to your component
 useEffect(() => {
@@ -377,6 +573,7 @@ useEffect(() => {
           {gameStarted && !gameOver ? 'AI Playing' : 'Start AI'}
         </button>
         
+        
         <div className="ai-speed-control">
           <label>AI Speed:</label>
           <input 
@@ -390,10 +587,72 @@ useEffect(() => {
         </div>
       </div>
       
-      <div className="scores">
+     {/*} <div className="scores">
         <div>Score: {score}</div>
         <div>High Score: {highScore}</div>
+      </div> */}
+
+      <div className="score-container">
+            <div className="score-item">
+               <div className="score-label">Score:</div>
+                  <div className={`score-value score-display ${scoreAnimation ? 'score-increase' : ''}`}>
+                    {score}
+                  </div>
+            </div>
+  
+            <div className="score-item">
+                <div className="score-label">High Score:</div>
+                    <div className={`score-value score-display ${highScoreAnimation ? 'highscore-beat' : ''}`}>
+                        {highScore}
+                        {newHighScore && <span className="new-highscore">New!</span>}
+                    </div>
+                   {highScoreAnimation && 
+                    setTimeout(() => setHighScoreAnimation(false), 1000)
+                   }
+           </div>
+       </div>
+
+<div className="particles-container">
+  {particles.map(particle => (
+    <div
+      key={particle.id}
+      className={particle.className}
+      style={{
+        left: `${particle.x}px`,
+        top: `${particle.y}px`,
+        width: `${particle.size}px`,
+        height: `${particle.size}px`,
+        backgroundColor: particle.color,
+        animationDuration: `${particle.life/60}s`,
+        ...particle.style
+      }}
+    />
+  ))}
+</div>
+      
+      <div className="difficulty-controls">
+      <h3>Difficulty:</h3>
+      <div className="difficulty-buttons">
+        <button
+          className={`difficulty-btn ${difficulty === 'easy' ? 'active' : ''}`}
+          onClick={() => handleDifficultyChange('easy')}
+        >
+          Easy
+        </button>
+        <button
+          className={`difficulty-btn ${difficulty === 'medium' ? 'active' : ''}`}
+          onClick={() => handleDifficultyChange('medium')}
+        >
+          Medium
+        </button>
+        <button
+          className={`difficulty-btn ${difficulty === 'hard' ? 'active' : ''}`}
+          onClick={() => handleDifficultyChange('hard')}
+        >
+          Hard
+        </button>
       </div>
+    </div>
       
       <div ref={gameAreaRef} className="game-area" style={{
           width: `${gameAreaWidth}px`,
@@ -419,7 +678,7 @@ useEffect(() => {
           <div className="game-over">
             <h2>Game Over!</h2>
             <p>Score: {score}</p>
-            <button onClick={startGame}>Play Again</button>
+            <button onClick={resetGame}>Play Again</button>
           </div>
         )}
         
